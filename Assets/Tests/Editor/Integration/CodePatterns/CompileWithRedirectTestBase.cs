@@ -41,7 +41,7 @@ namespace FastScriptReload.Tests.Editor.Integration.CodePatterns
                 var dynamicallyLoadedAssemblyCompilerResult = CompileCode(filePath);
 
                 var assemblyChangesLoader = AssemblyChangesLoaderResolver.Instance.Resolve();
-                var options = new AssemblyChangesLoaderEditorOptionsNeededInBuild(true, false);
+                var options = new AssemblyChangesLoaderEditorOptionsNeededInBuild(true, false, true);
                 assemblyChangesLoader.DynamicallyUpdateMethodsForCreatedAssembly(dynamicallyLoadedAssemblyCompilerResult.CompiledAssembly, options);
 
                 afterDetourTest(dynamicallyLoadedAssemblyCompilerResult);
@@ -65,6 +65,11 @@ namespace FastScriptReload.Tests.Editor.Integration.CodePatterns
             }
         }
 
+        protected static void AssertDetourConfirmed(Type type, string methodName, string assertDescription)
+        {
+            AssertDetourConfirmed(type, methodName, (o) => true, assertDescription);
+        }
+        
         protected static void AssertDetourConfirmed(Type type, string methodName, Func<object, bool> compareWithResultPredicate, string assertDescription)
         {
             Assert.IsTrue(TestDetourConfirmation.IsDetourConfirmed(type, methodName, compareWithResultPredicate), assertDescription);

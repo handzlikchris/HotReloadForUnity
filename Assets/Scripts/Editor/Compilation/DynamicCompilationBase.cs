@@ -74,6 +74,7 @@ namespace FastScriptReload.Editor.Compilation
         {
             var combinedUsingStatements = new List<string>();
             var typesDefined = new List<string>();
+            var alreadyHotReloadedTypesUsedByCode = new HashSet<string>();
             
             var sourceCodeWithAdjustments = sourceCodeFiles.Select(sourceCodeFile =>
             {
@@ -145,6 +146,21 @@ namespace FastScriptReload.Editor.Compilation
 					root = new ThisAssignmentRewriter(DebugWriteRewriteReasonAsComment).Visit(root);
                 }
 
+                if (FastScriptReloadManager.Instance.AssemblyChangesLoaderEditorOptionsNeededInBuild.EnableExperimentalRuntimeMethodsAddedSupport)
+                {
+                    var alreadyHotReloadedTypes = AppDomain.CurrentDomain
+                        .GetAssemblies()
+                        .Select(a => new { assy = a, dynamicallyCreatedAssemblyAttribute = CustomAttributeExtensions.GetCustomAttribute<DynamicallyCreatedAssemblyAttribute>(a) })
+                        .Where(a => a.dynamicallyCreatedAssemblyAttribute != null)
+                        .SelectMany(a => a.assy.GetTypes().Select(t => t.FullName.Replace(AssemblyChangesLoader.ClassnamePatchedPostfix, string.Empty)))
+                        .Distinct()
+                        .ToHashSet();
+                    var alreadyHotReloadedTypeUsageRewriter = new AlreadyHotReloadedTypeUsageRewriter(alreadyHotReloadedTypes, DebugWriteRewriteReasonAsComment);
+                    root = alreadyHotReloadedTypeUsageRewriter.Visit(root);
+
+                    alreadyHotReloadedTypesUsedByCode = alreadyHotReloadedTypeUsageRewriter.AlreadyHotReloadedTypes;
+                }
+
                 if (FastScriptReloadManager.Instance.AssemblyChangesLoaderEditorOptionsNeededInBuild.EnableExperimentalAddedFieldsSupport)
                 {
                     root = new NewFieldsRewriter(typeToNewFieldDeclarations, DebugWriteRewriteReasonAsComment).Visit(root);
@@ -187,7 +203,7 @@ namespace FastScriptReload.Editor.Compilation
             }
             
             LoggerScoped.LogDebug("Source Code Created:\r\n\r\n" + sourceCodeCombinedSb);
-            return new CreateSourceCodeCombinedContentsResult(sourceCodeCombinedSb.ToString(), typesDefined);
+            return new CreateSourceCodeCombinedContentsResult(sourceCodeCombinedSb.ToString(), typesDefined, alreadyHotReloadedTypesUsedByCode);
         }
 
         private static SyntaxNode AddUserDefinedOverridenTypes(SyntaxNode userDefinedOverridesRoot, SyntaxNode root)
@@ -279,12 +295,13 @@ namespace FastScriptReload.Editor.Compilation
             return root;
         }
 
-        protected static List<string> ResolveReferencesToAdd(List<string> excludeAssyNames)
+        protected static List<string> ResolveReferencesToAdd(List<string> excludeAssyNames, HashSet<string> alreadyHotReloadedTypesUsedByCode)
         {
             var referencesToAdd = new List<string>();
             var nonExcludedAssemblies = AppDomain.CurrentDomain
                 .GetAssemblies()
-                .Where(a => excludeAssyNames.All(assyName => !a.FullName.StartsWith(assyName)));
+                .Where(a => excludeAssyNames.All(assyName => !a.FullName.StartsWith(assyName)))
+                .ToList();
             foreach (var assembly in nonExcludedAssemblies //TODO: PERF: just need to load once and cache? or get assembly based on changed file only?
                          .Where(a => CustomAttributeExtensions.GetCustomAttribute<DynamicallyCreatedAssemblyAttribute>(a) == null))
             {
@@ -304,18 +321,41 @@ namespace FastScriptReload.Editor.Compilation
                 }
             }
             
-            referencesToAdd = referencesToAdd.Where(r => !ReferencesExcludedFromHotReload.Any(rTe => r.EndsWith(rTe))).ToList();
-
             if (EnableExperimentalThisCallLimitationFix || FastScriptReloadManager.Instance.AssemblyChangesLoaderEditorOptionsNeededInBuild.EnableExperimentalAddedFieldsSupport)
             {
 	            IncludeMicrosoftCsharpReferenceToSupportDynamicKeyword(referencesToAdd);
             }
             
-            var alreadyHotReloadedAssemblies = nonExcludedAssemblies
-                .Where(a => CustomAttributeExtensions.GetCustomAttribute<DynamicallyCreatedAssemblyAttribute>(a) != null);
-            //TODO: test only - need to resolve somehow which hot-reload assembly references are needed
-            referencesToAdd.AddRange(alreadyHotReloadedAssemblies.Select(a => a.Location));
+            var alreadyHotReloadedAssembliesOrderedByNewest = nonExcludedAssemblies
+                .Select(a => new { assy = a, dynamicallyCreatedAssemblyAttribute = CustomAttributeExtensions.GetCustomAttribute<DynamicallyCreatedAssemblyAttribute>(a) })
+                .Where(a => a.dynamicallyCreatedAssemblyAttribute != null)
+                .OrderByDescending(a => new FileInfo(a.assy.Location).CreationTimeUtc)
+                .Select(a => a.assy)
+                .ToList();
+                                               
+            var assembliesToUseForRequiredTypes = alreadyHotReloadedTypesUsedByCode
+                .Select(typeNameNeeded =>
+                {
+                    var assyToUseForRequiredType = alreadyHotReloadedAssembliesOrderedByNewest
+                        .FirstOrDefault(a => a.GetTypes().Any(assemblyType => string.Equals(
+                            assemblyType.FullName.Replace(AssemblyChangesLoader.ClassnamePatchedPostfix, string.Empty),
+                            typeNameNeeded
+                        )));
+                    if (assyToUseForRequiredType == null)
+                    {
+                        LoggerScoped.LogWarning($"Type {typeNameNeeded} is used in currently hot-reloaded code. You may get compilation error due to using newly added field / method. Please do full recompile.");
+                        return null;
+                    }
+
+                    return assyToUseForRequiredType;
+                }).Where(a => a != null)
+                .Select(a => a.Location)
+                .Distinct() //it's possible single assembly is having all needed types, make sure to use only one
+                .ToList();
             
+            referencesToAdd.AddRange(assembliesToUseForRequiredTypes);
+            
+            referencesToAdd = referencesToAdd.Where(r => !ReferencesExcludedFromHotReload.Any(rTe => r.EndsWith(rTe))).ToList();
             return referencesToAdd;
         }
 
@@ -332,11 +372,13 @@ namespace FastScriptReload.Editor.Compilation
     {
         public string SourceCode { get; }
         public List<string> TypeNamesDefinitions { get; }
+        public HashSet<string> AlreadyHotReloadedTypesUsedByCode { get; }
 
-        public CreateSourceCodeCombinedContentsResult(string sourceCode, List<string> typeNamesDefinitions)
+        public CreateSourceCodeCombinedContentsResult(string sourceCode, List<string> typeNamesDefinitions, HashSet<string> alreadyHotReloadedTypesUsedByCode)
         {
             SourceCode = sourceCode;
             TypeNamesDefinitions = typeNamesDefinitions;
+            AlreadyHotReloadedTypesUsedByCode = alreadyHotReloadedTypesUsedByCode;
         }
     }
 }

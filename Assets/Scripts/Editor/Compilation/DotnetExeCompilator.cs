@@ -100,7 +100,7 @@ namespace FastScriptReload.Editor.Compilation
 
                 var shouldAddUnsafeFlag = createSourceCodeCombinedResult.SourceCode.Contains("unsafe"); //TODO: not ideal as 'unsafe' can be part of comment, not code. But compiling with that flag in more cases shouldn't cause issues
                 var rspFileContent = GenerateCompilerArgsRspFileContents(outLibraryPath, sourceCodeCombinedFilePath, assemblyAttributeFilePath, 
-                    originalAssemblyPathToAsmWithInternalsVisibleToCompiled, shouldAddUnsafeFlag);
+                    originalAssemblyPathToAsmWithInternalsVisibleToCompiled, shouldAddUnsafeFlag, createSourceCodeCombinedResult.AlreadyHotReloadedTypesUsedByCode);
                 CreateFileAndTrackAsCleanup(rspFile, rspFileContent, _createdFilesToCleanUp);
                 CreateFileAndTrackAsCleanup(assemblyAttributeFilePath, DynamicallyCreatedAssemblyAttributeSourceCode, _createdFilesToCleanUp);
 
@@ -187,7 +187,7 @@ You can also:
         }
 
         private static string GenerateCompilerArgsRspFileContents(string outLibraryPath, string sourceCodeCombinedFilePath, string assemblyAttributeFilePath, 
-            Dictionary<string, string> originalAssemblyPathToAsmWithInternalsVisibleToCompiled, bool addUnsafeFlag)
+            Dictionary<string, string> originalAssemblyPathToAsmWithInternalsVisibleToCompiled, bool addUnsafeFlag, HashSet<string> alreadyHotReloadedTypesUsedByCode)
         {
             var rspContents = new StringBuilder();
             rspContents.AppendLine("-target:library");
@@ -198,7 +198,7 @@ You can also:
                 rspContents.AppendLine($"-define:{symbol}");
             }
 
-            foreach (var referenceToAdd in ResolveReferencesToAdd(new List<string>()))
+            foreach (var referenceToAdd in ResolveReferencesToAdd(new List<string>(), alreadyHotReloadedTypesUsedByCode))
             {
                 if (originalAssemblyPathToAsmWithInternalsVisibleToCompiled.TryGetValue(referenceToAdd, out var asmWithInternalsVisibleTo))
                 {

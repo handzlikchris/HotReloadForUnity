@@ -8,6 +8,11 @@ public static class TestDetourConfirmation
     
     private static Dictionary<string, object> ConfirmationEntries { get; } = new Dictionary<string, object>();
 
+    public static void Confirm(Type type, string methodName)
+    {
+        Confirm(type, methodName, null);
+    }
+    
     public static void Confirm(Type type, string methodName, object confirmationObject)
     {
         ConfirmationEntries.Add($"{type.FullName}:{methodName}", confirmationObject);
@@ -20,7 +25,13 @@ public static class TestDetourConfirmation
 
     public static bool IsDetourConfirmed(Type type, string methodName, Func<object, bool> compareWithResultPredicate)
     {
-        if (ConfirmationEntries.TryGetValue($"{type.FullName}:{methodName}", out var confirmationObject))
+        object confirmationObject = null;
+        if (ConfirmationEntries.TryGetValue($"{type.FullName}:{methodName}", out confirmationObject))
+        {
+            return compareWithResultPredicate(confirmationObject);
+        }
+        
+        if (ConfirmationEntries.TryGetValue($"{type.FullName}__Patched_:{methodName}", out confirmationObject)) //also try class name with patched postfix
         {
             return compareWithResultPredicate(confirmationObject);
         }

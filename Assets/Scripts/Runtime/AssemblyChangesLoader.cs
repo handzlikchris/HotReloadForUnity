@@ -107,12 +107,11 @@ namespace FastScriptReload.Runtime
                                 DetourCrashHandler.LogDetour(matchingMethodInExistingType.ResolveFullName());
                                 Memory.DetourMethod(matchingMethodInExistingType, createdTypeMethodToUpdate);
                             }
-                            else 
+                            else if(!editorOptions.EnableExperimentalRuntimeMethodsAddedSupport)
                             {
                                 LoggerScoped.LogWarning($"Method: {createdTypeMethodToUpdate.FullDescription()} does not exist in initially compiled type: {matchingTypeInExistingAssemblies.FullName}. " +
-                                                 $"Adding new methods at runtime is not fully supported. \r\n" +
-                                                 $"It'll only work new method is only used by declaring class (eg private method)\r\n" +
-                                                 $"Make sure to add method before initial compilation.");
+                                                        $"You can enable experimental setting from options. \r\n" +
+                                                        $"Otherwise added method will only work if it's used by declaring class (eg private method)\r\n");
                             }
                         }
                         
@@ -260,11 +259,14 @@ namespace FastScriptReload.Runtime
     {
         public bool IsDidFieldsOrPropertyCountChangedCheckDisabled;
         public bool EnableExperimentalAddedFieldsSupport;
+        public bool EnableExperimentalRuntimeMethodsAddedSupport;
 
-        public AssemblyChangesLoaderEditorOptionsNeededInBuild(bool isDidFieldsOrPropertyCountChangedCheckDisabled, bool enableExperimentalAddedFieldsSupport)
+        public AssemblyChangesLoaderEditorOptionsNeededInBuild(bool isDidFieldsOrPropertyCountChangedCheckDisabled, bool enableExperimentalAddedFieldsSupport, 
+            bool enableExperimentalRuntimeMethodsAddedSupport)
         {
             IsDidFieldsOrPropertyCountChangedCheckDisabled = isDidFieldsOrPropertyCountChangedCheckDisabled;
             EnableExperimentalAddedFieldsSupport = enableExperimentalAddedFieldsSupport;
+            EnableExperimentalRuntimeMethodsAddedSupport = enableExperimentalRuntimeMethodsAddedSupport;
         }
         
 #pragma warning disable 0618
@@ -275,10 +277,11 @@ namespace FastScriptReload.Runtime
         }
 
         //WARN: make sure it has same params as ctor
-        public void UpdateValues(bool isDidFieldsOrPropertyCountChangedCheckDisabled, bool enableExperimentalAddedFieldsSupport)
+        public void UpdateValues(bool isDidFieldsOrPropertyCountChangedCheckDisabled, bool enableExperimentalAddedFieldsSupport, bool enableExperimentalRuntimeMethodsAddedSupport)
         {
             IsDidFieldsOrPropertyCountChangedCheckDisabled = isDidFieldsOrPropertyCountChangedCheckDisabled;
             EnableExperimentalAddedFieldsSupport = enableExperimentalAddedFieldsSupport;
+            EnableExperimentalRuntimeMethodsAddedSupport = enableExperimentalRuntimeMethodsAddedSupport;
         }
     }
 }

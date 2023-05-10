@@ -14,17 +14,13 @@ public class NewMethodAddedTests : CompileWithRedirectTestBase
     public IEnumerator AssignNestedEnumToField_ValueAssignedDirectly_CorrectValueOnOriginalInstance()
     {
         var instance = new GameObject("instance").AddComponent<ClassCallingNewMethodAdded>();
-
-        Assert.AreEqual(instance.WasExistingMethodBaselineCalled, false, "not called yet");
-        instance.CallNewlyAddedHotReloadedClassMethod();
-        Assert.AreEqual(instance.WasExistingMethodBaselineCalled, true, "baseline called");
-
+        
         TestCompileAndDetour(ResolveFullTestFilePath(@"Runtime\Integration\NewMethods\NewMethodAddedInClass.cs"), (compilationResult) =>
         {
             var addedMethod = compilationResult.CompiledAssembly.GetTypes().FirstOrDefault(t => t.Name == nameof(NewMethodAddedInClass) + FastScriptReload.Runtime.AssemblyChangesLoader.ClassnamePatchedPostfix)
                 .GetMethod("NewMethod", BindingFlags.Instance | BindingFlags.Public);
             
-            Assert.IsNotNull(addedMethod, "method should be added to new type");
+            Assert.IsNotNull(addedMethod, "method should be added to new type"); 
         });
 
         TestCompileAndDetour(ResolveFullTestFilePath(@"Runtime\Integration\NewMethods\ClassCallingNewMethodAdded.cs"), (compilationResult) =>
@@ -32,10 +28,12 @@ public class NewMethodAddedTests : CompileWithRedirectTestBase
             var err = compilationResult.IsError;
         });
         
-        Assert.AreEqual(instance.WasNewMethodCalled, false, "not called yet");
         instance.CallNewlyAddedHotReloadedClassMethod();
-        Assert.AreEqual(instance.WasNewMethodCalled, true, "newly added method called from hotreloaded class");
+        
+        AssertDetourConfirmed(typeof(NewMethodAddedInClass), "NewMethod", "New method called");
         
         yield return null;
     }
+    
+    //TODO: test static calls
 }

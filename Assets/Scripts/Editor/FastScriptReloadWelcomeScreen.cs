@@ -482,6 +482,21 @@ New fields will also show in editor - you can tweak them as normal variables.", 
 
                         GUILayout.Space(10);
                     })),
+                    new ChangeMainViewButton("New Methods", (screen) =>
+                    {
+                        using (LayoutHelper.LabelWidth(350))
+                        {
+                            ProductPreferenceBase.RenderGuiAndPersistInput(FastScriptReloadPreference.EnableExperimentalRuntimeMethodsAddedSupport);
+                        }
+                        GUILayout.Space(10);
+
+                        if (Application.isPlaying)
+                        {
+                            EditorGUILayout.HelpBox(@"You're in playmode, for option to start working you need to restart playmode.", MessageType.Warning);
+                        }
+
+                        GUILayout.Space(10);
+                    }),
                     (EditorHotReloadSection = new ChangeMainViewButton("Editor Hot-Reload", (screen) =>
                     {
                         EditorGUILayout.HelpBox(@"Currently asset hot-reloads only in play-mode, you can enable experimental editor mode support here.
@@ -763,6 +778,17 @@ includeSubdirectories - whether child directories should be watched as well
                 FastScriptReloadManager.Instance.AssemblyChangesLoaderEditorOptionsNeededInBuild.EnableExperimentalAddedFieldsSupport = (bool)value;
             });
         
+        public static readonly ToggleProjectEditorPreferenceDefinition EnableExperimentalRuntimeMethodsAddedSupport = new ToggleProjectEditorPreferenceDefinition(
+            "(Experimental) Enable runtime added methods support", "EnableExperimentalRuntimeMethodsAddedSupport", false,
+            (object newValue, object oldValue) =>
+            {
+                FastScriptReloadManager.Instance.AssemblyChangesLoaderEditorOptionsNeededInBuild.EnableExperimentalRuntimeMethodsAddedSupport = (bool)newValue;
+            },
+            (value) =>
+            {
+                FastScriptReloadManager.Instance.AssemblyChangesLoaderEditorOptionsNeededInBuild.EnableExperimentalRuntimeMethodsAddedSupport = (bool)value;
+            });
+        
         public static readonly ToggleProjectEditorPreferenceDefinition EnableExperimentalEditorHotReloadSupport = new ToggleProjectEditorPreferenceDefinition(
             "(Experimental) Enable Hot-Reload outside of play mode", "EnableExperimentalEditorHotReloadSupport", false);
         
@@ -892,7 +918,8 @@ includeSubdirectories - whether child directories should be watched as well
             DynamicCompilationBase.ReferencesExcludedFromHotReload = (List<string>)FastScriptReloadPreference.ReferencesExcludedFromHotReload.GetElements();
             FastScriptReloadManager.Instance.AssemblyChangesLoaderEditorOptionsNeededInBuild.UpdateValues(
                 (bool)FastScriptReloadPreference.IsDidFieldsOrPropertyCountChangedCheckDisabled.GetEditorPersistedValueOrDefault(),
-                (bool)FastScriptReloadPreference.EnableExperimentalAddedFieldsSupport.GetEditorPersistedValueOrDefault()
+                (bool)FastScriptReloadPreference.EnableExperimentalAddedFieldsSupport.GetEditorPersistedValueOrDefault(),
+                (bool)FastScriptReloadPreference.EnableExperimentalRuntimeMethodsAddedSupport.GetEditorPersistedValueOrDefault()
             );
             
             BuildDefineSymbolManager.SetBuildDefineSymbolState(FastScriptReloadPreference.BuildSymbol_DetailedDebugLogging,
