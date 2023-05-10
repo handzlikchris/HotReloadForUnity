@@ -282,10 +282,11 @@ namespace FastScriptReload.Editor.Compilation
         protected static List<string> ResolveReferencesToAdd(List<string> excludeAssyNames)
         {
             var referencesToAdd = new List<string>();
-            foreach (var assembly in AppDomain.CurrentDomain
-                         .GetAssemblies() //TODO: PERF: just need to load once and cache? or get assembly based on changed file only?
-                         .Where(a => excludeAssyNames.All(assyName => !a.FullName.StartsWith(assyName))
-												&& CustomAttributeExtensions.GetCustomAttribute<DynamicallyCreatedAssemblyAttribute>((Assembly)a) == null))
+            var nonExcludedAssemblies = AppDomain.CurrentDomain
+                .GetAssemblies()
+                .Where(a => excludeAssyNames.All(assyName => !a.FullName.StartsWith(assyName)));
+            foreach (var assembly in nonExcludedAssemblies //TODO: PERF: just need to load once and cache? or get assembly based on changed file only?
+                         .Where(a => CustomAttributeExtensions.GetCustomAttribute<DynamicallyCreatedAssemblyAttribute>(a) == null))
             {
                 try
                 {
@@ -309,7 +310,12 @@ namespace FastScriptReload.Editor.Compilation
             {
 	            IncludeMicrosoftCsharpReferenceToSupportDynamicKeyword(referencesToAdd);
             }
-
+            
+            var alreadyHotReloadedAssemblies = nonExcludedAssemblies
+                .Where(a => CustomAttributeExtensions.GetCustomAttribute<DynamicallyCreatedAssemblyAttribute>(a) != null);
+            //TODO: test only - need to resolve somehow which hot-reload assembly references are needed
+            referencesToAdd.AddRange(alreadyHotReloadedAssemblies.Select(a => a.Location));
+            
             return referencesToAdd;
         }
 
